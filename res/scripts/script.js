@@ -345,8 +345,7 @@
     function finish() {
       if (done) return;
       done = true;
-      removeEventListener('click', onSkip);
-      removeEventListener('keydown', onSkip);
+      ['click', 'touchend', 'keydown'].forEach((t) => removeEventListener(t, onSkip));
       root.classList.remove('booting');
       boot.classList.add('out');
       document.body.classList.add('tear');
@@ -434,12 +433,10 @@
     await new Promise((resolve) => {
       const go = (e) => {
         if (e.type === 'keydown' && e.key === 'Escape') return;
-        removeEventListener('click', go);
-        removeEventListener('keydown', go);
+        ['click', 'touchend', 'pointerup', 'keydown'].forEach((t) => removeEventListener(t, go));
         resolve();
       };
-      addEventListener('click', go);
-      addEventListener('keydown', go);
+      ['click', 'touchend', 'pointerup', 'keydown'].forEach((t) => addEventListener(t, go));
     });
 
     setSfx(true);
@@ -449,8 +446,7 @@
     boot.classList.add('run');
     setTimeout(() => {
       if (done) return;
-      addEventListener('click', onSkip);
-      addEventListener('keydown', onSkip);
+      ['click', 'touchend', 'keydown'].forEach((t) => addEventListener(t, onSkip));
     }, 600);
 
     try {
