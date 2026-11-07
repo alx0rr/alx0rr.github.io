@@ -7,6 +7,8 @@
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 
   const REDUCED_MOTION = matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const root = document.documentElement;
+  const booting = () => root.classList.contains('booting');
 
 
   const MARQUEE_1 = 'FULL STACK ✶ DEVOPS ✶ REVERSE ENGINEERING ✶ BOTS ✶ ';
@@ -230,6 +232,20 @@
         noise(.35, .12, 'bandpass', 4200, 1.2, 320);
         setTimeout(() => noise(.12, .08, 'highpass', 2500), 130);
       },
+      beep: () => tone(1000, .14, 'square', .05),
+      key: () => noise(.012, .05, 'highpass', 4000),
+      hdd: () => {
+        noise(.02, .06, 'bandpass', rand(600, 1400), 2);
+        tone(rand(60, 100), .04, 'square', .02);
+      },
+      power: () => {
+        tone(45, .6, 'sine', .22, 110);
+        noise(.5, .07, 'bandpass', 300, 1, 3500);
+      },
+      alarm: () => {
+        tone(440, .16, 'square', .06);
+        setTimeout(() => tone(310, .3, 'square', .06), 170);
+      },
     };
   })();
 
@@ -276,33 +292,174 @@
     });
 
     return {
-      set(on) {
+      set(on, level = .55) {
         enabled = on;
         if (on) {
-          audio.play().then(() => fadeTo(.55)).catch(() => {});
+          audio.play().then(() => fadeTo(level)).catch(() => {});
         } else {
           fadeTo(0);
           setTimeout(() => { if (!enabled) audio.pause(); }, 1800);
         }
       },
+      level(v) { if (enabled) fadeTo(v); },
     };
   })();
 
   const musicButton = $('#mus');
-  const setMusic = (on) => {
+  const setMusic = (on, level) => {
     musicButton.setAttribute('aria-pressed', on);
-    Music.set(on);
+    Music.set(on, level);
   };
   musicButton.onclick = () => setMusic(musicButton.getAttribute('aria-pressed') !== 'true');
 
-  let firstClickDone = false;
-  addEventListener('click', (e) => {
-    if (firstClickDone) return;
-    firstClickDone = true;
-    if (e.target.closest('nav button') || REDUCED_MOTION) return;
+  (async () => {
+    const boot = $('#boot');
+    if (REDUCED_MOTION) {
+      root.classList.remove('booting');
+      boot.remove();
+      return;
+    }
+
+    const out = $('#bt');
+    const SKIP = Symbol('skip');
+    let skipped = false;
+    let done = false;
+    let wake;
+
+    const sleep = (ms) => new Promise((res) => { wake = res; setTimeout(res, ms); })
+      .then(() => { if (skipped) throw SKIP; });
+    const print = (html = '') => out.insertAdjacentHTML('beforeend', html + '\n');
+    const type = async (text, ms = 22) => {
+      for (const ch of text) {
+        out.append(ch);
+        Sound.key();
+        await sleep(ms);
+      }
+    };
+
+    function onSkip() {
+      skipped = true;
+      if (wake) wake();
+    }
+
+    function finish() {
+      if (done) return;
+      done = true;
+      removeEventListener('click', onSkip);
+      removeEventListener('keydown', onSkip);
+      root.classList.remove('booting');
+      boot.classList.add('out');
+      document.body.classList.add('tear');
+      Sound.glitch();
+      Music.level(.55);
+      setTimeout(() => {
+        document.body.classList.remove('tear');
+        boot.remove();
+      }, 450);
+    }
+
+    async function sequence() {
+      await sleep(350);
+      Sound.beep();
+      print('ALX0RR BIOS v2.6.0');
+      print('<span class="d">(C) 1994-2026 Alx0rr Systems</span>');
+      print();
+      await sleep(300);
+
+      print('CPU ........ 486DX2-66 ok');
+      await sleep(180);
+
+      print('MEMORY ..... <span id="bm">    0</span>K<span id="bmo"></span>');
+      const mem = $('#bm');
+      for (let k = 1; k <= 16; k++) {
+        mem.textContent = String(k * 4096).padStart(5, ' ');
+        Sound.tick();
+        await sleep(40);
+      }
+      $('#bmo').textContent = ' ok';
+      await sleep(150);
+
+      print('VIDEO ...... CRT 640x480 ok');
+      await sleep(180);
+      print('DRIVES ..... HDD0 HDD1 ok');
+      for (let k = 0; k < 4; k++) { Sound.hdd(); await sleep(70); }
+      print('NETWORK .... link up <span class="d">(why?)</span>');
+      await sleep(250);
+
+      print();
+      print('LOADING ALX0RR.SYS');
+      print('[<span id="bb"></span>] <span id="bpc">0</span>%');
+      const bar = $('#bb');
+      const pc = $('#bpc');
+      const draw = (n) => {
+        bar.textContent = '#'.repeat(n) + '-'.repeat(20 - n);
+        pc.textContent = n * 5;
+      };
+      for (let n = 0; n <= 17; n++) {
+        draw(n);
+        if (Math.random() < .7) Sound.hdd();
+        await sleep(rand(30, 80));
+      }
+      await sleep(450);
+
+      boot.classList.add('err');
+      out.textContent = '';
+      Sound.glitch();
+      Sound.alarm();
+      print('<span class="i"> FATAL EXCEPTION 0E </span>');
+      print('at 0028:C0011E36');
+      print('<span class="d">module: CONTAINMENT.SYS</span>');
+      print();
+      print('<span class="e">CONTAINMENT FAILURE</span>');
+      await sleep(300);
+      print('SUBJECT DETECTED.');
+      await sleep(300);
+      print('TRACKING ENABLED.');
+      print();
+      await sleep(450);
+
+      await type('> abort? [Y/N] ');
+      await sleep(400);
+      await type('n', 120);
+      print();
+      await sleep(300);
+      print('> abort denied.');
+      await sleep(350);
+      print('> no one is coming.');
+      await sleep(500);
+      print('> resuming anyway<span class="cur"></span>');
+      await sleep(700);
+    }
+
+    await new Promise((resolve) => {
+      const go = (e) => {
+        if (e.type === 'keydown' && e.key === 'Escape') return;
+        removeEventListener('click', go);
+        removeEventListener('keydown', go);
+        resolve();
+      };
+      addEventListener('click', go);
+      addEventListener('keydown', go);
+    });
+
     setSfx(true);
-    setMusic(true);
-  });
+    setMusic(true, .12);
+    Sound.power();
+    $('#bgo').remove();
+    boot.classList.add('run');
+    setTimeout(() => {
+      if (done) return;
+      addEventListener('click', onSkip);
+      addEventListener('keydown', onSkip);
+    }, 600);
+
+    try {
+      await sequence();
+    } catch (e) {
+      if (e !== SKIP) throw e;
+    }
+    finish();
+  })();
 
   $$('a,.btn').forEach((el) => el.addEventListener('pointerenter', () => Sound.tick()));
   $$('a.btn,.pj a,#contact a').forEach((el) => el.addEventListener('pointerdown', () => Sound.hit()));
@@ -873,6 +1030,7 @@
 
     (function flicker() {
       setTimeout(() => {
+        if (booting()) { flicker(); return; }
         const levels = [.55, 0, .8, .1, .5, 0].slice(0, 3 + ((Math.random() * 4) | 0));
         let i = 0;
 
@@ -889,6 +1047,7 @@
 
     (function tearLoop() {
       setTimeout(() => {
+        if (booting()) { tearLoop(); return; }
         document.body.classList.add('tear');
         Sound.glitch();
         setTimeout(() => document.body.classList.remove('tear'), 360);
